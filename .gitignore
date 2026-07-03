@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ML artifacts
+*.pt
+*.pth
+*.onnx
+*.h5
+*.ckpt
+checkpoints/
+runs/
+wandb/
+outputs/
+logs/
+
+# Data
+data/
+datasets/
+*.csv
+*.parquet
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
