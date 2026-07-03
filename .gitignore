@@ -19,12 +19,15 @@ env/
 checkpoints/
 runs/
 wandb/
-outputs/
 logs/
+outputs/*
+!outputs/.gitkeep
 
 # Data
-data/
-datasets/
+datasets/raw/*
+!datasets/raw/.gitkeep
+datasets/processed/*
+!datasets/processed/.gitkeep
 *.csv
 *.parquet
 
