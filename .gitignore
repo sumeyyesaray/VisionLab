@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .eggs/
+
+# Virtual Environment
 .venv/
 venv/
 env/
@@ -10,29 +12,31 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# ML artifacts
+# IDE
+.vscode/
+.idea/
+
+# Models
 *.pt
 *.pth
 *.onnx
-*.h5
 *.ckpt
-checkpoints/
-runs/
+*.h5
+
+# Experiment Tracking
+mlruns/
 wandb/
+runs/
 logs/
-outputs/*
-!outputs/.gitkeep
 
-# Data
-datasets/raw/*
-!datasets/raw/.gitkeep
-datasets/processed/*
-!datasets/processed/.gitkeep
-*.csv
-*.parquet
+# Outputs
+outputs/
 
-# OS / Editor
+# Datasets
+datasets/raw/
+datasets/extracted/
+datasets/processed/
+
+# OS
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/
