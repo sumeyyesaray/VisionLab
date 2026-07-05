@@ -1,9 +1,20 @@
 [project]
 name = "visionlab"
 version = "0.1.0"
-description = "Computer vision / ML araştırma ve deney projesi"
+description = "Computer vision / ML research and experimentation project"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "pandas",
+    "numpy",
+    "pillow",
+    "pyyaml",
+    "torch",
+    "torchvision",
+    "matplotlib",
+]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

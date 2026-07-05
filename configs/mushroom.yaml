@@ -1,0 +1,15 @@
+# Mushroom dataset is balanced and large (4080 images/class) — augmentation
+# here is for regularization/robustness, not for fixing imbalance. Kept
+# conservative (light preset, narrow crop scale) until the near-duplicate
+# question from Sprint 1 is resolved. See notebooks/01_mushroom_dataset_exploration.ipynb.
+dataset_type: mushroom
+dataset_root: datasets/extracted/mushroom
+label_map_path: configs/label_maps/mushroom_label_map.json
+
+image_size: 224
+batch_size: 32
+num_workers: 4
+pin_memory: false
+
+augmentation_preset: light
+random_resized_crop_scale: [0.9, 1.0]

@@ -1,0 +1,15 @@
+# Flower dataset is small (64 images/class avg, min 27) and naturally
+# imbalanced — augmentation here also has to work as a diversity multiplier,
+# not just regularization. Heavier preset, wider crop scale than mushroom.
+# See notebooks/02_flower_dataset_exploration.ipynb, section 12.
+dataset_type: flower
+dataset_root: datasets/extracted/flower_data
+label_map_path: configs/label_maps/flower_label_map.json
+
+image_size: 224
+batch_size: 32
+num_workers: 4
+pin_memory: false
+
+augmentation_preset: heavy
+random_resized_crop_scale: [0.7, 1.0]
