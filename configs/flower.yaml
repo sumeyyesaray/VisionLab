@@ -13,3 +13,21 @@ pin_memory: false
 
 augmentation_preset: heavy
 random_resized_crop_scale: [0.7, 1.0]
+
+# ResNet-50 chosen first per the Sprint 4 model research wrap-up (lowest-risk
+# option to validate the Model Zoo registry/checkpoint design) — see
+# notebooks/04_model_research_part2.ipynb, "Summary — Model Research
+# Wrap-Up & Trial Order".
+model:
+  name: resnet50
+  pretrained: true
+  freeze_backbone: false # default to fine-tune, per Reading Note 1 (Yosinski et al.)
+
+# Flower is naturally imbalanced (std≈35.4 in Sprint 1) — class-weighted
+# loss is a real candidate here, unlike mushroom.
+training:
+  loss: cross_entropy
+  class_weighted_loss: true
+  optimizer: adamw
+  lr: 0.0001
+  epochs: 1
