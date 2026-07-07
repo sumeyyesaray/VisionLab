@@ -1,9 +1,12 @@
-# Hyperparameters & Configurable Variables (as of Sprint 3)
+# Hyperparameters & Configurable Variables (as of Sprint 5)
 
 Reference list of every tunable value in the codebase so far, where it lives,
 and why it currently has the value it does. Anything under "Config-level"
 changes per dataset without touching code; everything else is currently a
 fixed constant in `src/`.
+
+*Data pipeline parameters (Sprint 3) are below in their own section;
+Model Zoo / Training Engine parameters (Sprint 5) are at the end.*
 
 ## Config-level (`configs/mushroom.yaml`, `configs/flower.yaml`)
 
@@ -67,6 +70,61 @@ These live in the Sprint 1/3 notebooks themselves and would need to move into
 | Benchmark batches timed per combination | 5 | same |
 | Benchmark `num_workers` | fixed at `0` | same — deliberately isolated from the image_size/batch_size/augmentation comparison |
 
+## Model-level config (Sprint 5 — `model:` section in `configs/*.yaml`)
+
+| Key | Mushroom | Flower | Notes |
+|---|---|---|---|
+| `name` | `resnet50` | `resnet50` | only registry entry so far — first model per the Sprint 4 trial order |
+| `pretrained` | `true` | `true` | ImageNet-pretrained weights via `torchvision.models.resnet50` |
+| `freeze_backbone` | `false` | `false` | default to fine-tune, not freeze, per Reading Note 1 (Yosinski et al.) — `BaseModel.freeze_backbone()`/`unfreeze_backbone()` exist and are verified working, just not the default |
+
+## Training-level config (Sprint 5 — `training:` section in `configs/*.yaml`)
+
+| Key | Mushroom | Flower | Notes |
+|---|---|---|---|
+| `loss` | `cross_entropy` | `cross_entropy` | only registry entry so far |
+| `class_weighted_loss` | `false` | `true` | mushroom is balanced (`std=0`, Sprint 1) → no weighting; flower is imbalanced (`std≈35.4`) → inverse-frequency class weights via `compute_class_weights()` |
+| `optimizer` | `adamw` | `adamw` | `OPTIMIZER_REGISTRY` also has `sgd`/`adam` available but unused so far |
+| `lr` | `0.0001` | `0.0001` | a reasonable AdamW default, **not tuned** — no learning-rate search has been run |
+| `epochs` | `1` | `1` | placeholder for smoke-testing the pipeline, not a real training budget — see open questions |
+
+## Model-level fixed values (`src/models/`)
+
+| Variable | Value | Where |
+|---|---|---|
+| Final layer replacement | `nn.Linear(in_features=2048, num_classes)` | `resnet.py` — `in_features` comes from the pretrained `resnet50.fc.in_features`, not hardcoded |
+| Freeze criterion | parameter name starts with `"fc."` | `resnet.py` — the only unfrozen part when `freeze_backbone()` is called |
+| `MODEL_REGISTRY` | `{"resnet50": ResNet50}` | `registry.py` — single entry; EfficientNet-B3 is next per the Sprint 4 wrap-up |
+| Checkpoint fields | `model_state_dict`, `architecture`, `num_classes`, `dataset_type`, `label_map_path`, `saved_at` | `checkpoint.py` — one `.pt` file per checkpoint, no separate metadata sidecar |
+| Checkpoint path convention | `outputs/checkpoints/{dataset_type}_{model_name}.pt` | `scripts/train_baseline.py` — not enforced inside `checkpoint.py` itself |
+
+## Training Engine fixed values (`src/training/`)
+
+| Variable | Value | Where |
+|---|---|---|
+| `LOSS_REGISTRY` | `{"cross_entropy": nn.CrossEntropyLoss}` | `losses.py` |
+| `OPTIMIZER_REGISTRY` | `{"sgd": SGD, "adam": Adam, "adamw": AdamW}` | `optimizers.py` |
+| Class weight formula | `total / (num_classes * count)` per class (inverse frequency) | `losses.py` — `compute_class_weights()` |
+| LR schedule | none | `engine.py` — fixed learning rate for the whole run, no scheduler yet |
+| Early stopping | none | `engine.py` — always runs the configured number of epochs |
+| Gradient clipping | none | `engine.py` |
+| `device` | `"cuda" if torch.cuda.is_available() else "cpu"` | auto-detected in `train_baseline.py`/notebook 05, not a config field |
+
+## `scripts/train_baseline.py` CLI defaults
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--epochs` | `None` (falls back to `training.epochs` in config) | override for real runs |
+| `--limit` | `None` (full dataset) | set to a small number for a quick smoke test, as used in notebook 05 |
+
+## Notebook-only constants (`05_model_training_report.ipynb`)
+
+| Constant | Value | Purpose |
+|---|---|---|
+| Tiny-subset training check size | 32 train images / 16 val images | just enough to prove gradients flow end-to-end, not a real training signal |
+| Tiny-subset epochs | 3 | enough to see the loss trend down on 32 images |
+| Tiny-subset batch size | 8 | |
+
 ## Known open questions (not yet resolved by a hyperparameter)
 
 - Whether mushroom's 4,080 images/class are all distinct originals or include
@@ -75,3 +133,12 @@ These live in the Sprint 1/3 notebooks themselves and would need to move into
 - How the flower dataset's unlabeled test set will be scored (official
   `imagelabels.mat` mapping vs. a new stratified split) — affects whether
   `test_loader` for flower stays label-less or gets a real `label_map`.
+- `epochs: 1` and `lr: 0.0001` in both configs are placeholders for pipeline
+  verification, not the result of any experiment — a real training budget
+  and learning-rate search are still open (Benchmark sprint).
+- No learning-rate scheduler or early stopping exists yet in `engine.py` —
+  both were named as still-missing in notebook 05's "Next Steps".
+- `medium`/`heavy`-preset augmentation ablation and the modern training
+  recipe (AdamW + RandAugment + Mixup/CutMix + stochastic depth, per the
+  ConvNeXt note) haven't been implemented — ConvNeXt-T is deliberately
+  deferred until they are (Sprint 4 wrap-up).
