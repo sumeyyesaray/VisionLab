@@ -9,20 +9,35 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
     device: torch.device,
+    scaler: "torch.amp.GradScaler | None" = None,
 ) -> dict:
+    """`scaler` is only needed for mixed precision — pass a
+    `torch.amp.GradScaler` to train in fp16/bf16 autocast, or leave it
+    `None` for plain fp32. VRAM is tight on a 4GB card (RTX 3050), so AMP
+    matters more here than it would on a larger GPU.
+    """
     model.train()
     total_loss = 0.0
     correct = 0
     total = 0
+    use_amp = scaler is not None
 
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
 
         optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+
+        with torch.autocast(device_type=device.type, enabled=use_amp):
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+
+        if use_amp:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
 
         total_loss += loss.item() * images.size(0)
         correct += (outputs.argmax(dim=1) == labels).sum().item()
@@ -37,6 +52,7 @@ def evaluate(
     loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
+    use_amp: bool = False,
 ) -> dict:
     model.eval()
     total_loss = 0.0
@@ -45,8 +61,10 @@ def evaluate(
 
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
-        outputs = model(images)
-        loss = criterion(outputs, labels)
+
+        with torch.autocast(device_type=device.type, enabled=use_amp):
+            outputs = model(images)
+            loss = criterion(outputs, labels)
 
         total_loss += loss.item() * images.size(0)
         correct += (outputs.argmax(dim=1) == labels).sum().item()

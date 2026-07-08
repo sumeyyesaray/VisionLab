@@ -24,3 +24,4 @@ class ResNet50(BaseModel):
     def unfreeze_backbone(self) -> None:
         for param in self.backbone.parameters():
             param.requires_grad = True
+

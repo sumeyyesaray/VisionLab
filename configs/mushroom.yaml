@@ -7,9 +7,9 @@ dataset_root: datasets/extracted/mushroom
 label_map_path: configs/label_maps/mushroom_label_map.json
 
 image_size: 224
-batch_size: 32
+batch_size: 16
 num_workers: 4
-pin_memory: false
+pin_memory: true # meaningful now that training runs on the RTX 3050 (CUDA)
 
 augmentation_preset: light
 random_resized_crop_scale: [0.9, 1.0]
@@ -24,9 +24,12 @@ model:
   freeze_backbone: false # default to fine-tune, per Reading Note 1 (Yosinski et al.)
 
 # Mushroom is balanced (std=0 in Sprint 1) — no class weighting needed.
+# epochs/lr here are for the small-subset first real run, not full training —
+# see notebooks/06_first_real_training_run.ipynb.
 training:
   loss: cross_entropy
   class_weighted_loss: false
   optimizer: adamw
   lr: 0.0001
-  epochs: 1
+  epochs: 6
+  mixed_precision: true # matters on a 4GB card (RTX 3050)

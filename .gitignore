@@ -25,6 +25,8 @@ env/
 
 # Experiment Tracking
 mlruns/
+mlartifacts/
+mlflow.db
 wandb/
 runs/
 logs/

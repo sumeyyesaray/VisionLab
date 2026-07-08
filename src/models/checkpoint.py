@@ -13,21 +13,32 @@ def save_checkpoint(
     architecture: str,
     dataset_type: str,
     label_map_path: str,
+    epoch: int | None = None,
+    optimizer: torch.optim.Optimizer | None = None,
+    scaler: "torch.amp.GradScaler | None" = None,
 ) -> None:
+    """Save a checkpoint. Pass `epoch`/`optimizer`/`scaler` too when the
+    checkpoint needs to support resuming training (not just inference) —
+    see `load_checkpoint` and scripts/train_baseline.py's `--resume` flag.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "architecture": architecture,
-            "num_classes": model.num_classes,
-            "dataset_type": dataset_type,
-            "label_map_path": label_map_path,
-            "saved_at": datetime.now(timezone.utc).isoformat(),
-        },
-        path,
-    )
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "architecture": architecture,
+        "num_classes": model.num_classes,
+        "dataset_type": dataset_type,
+        "label_map_path": label_map_path,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+        "epoch": epoch,
+    }
+    if optimizer is not None:
+        checkpoint["optimizer_state_dict"] = optimizer.state_dict()
+    if scaler is not None:
+        checkpoint["scaler_state_dict"] = scaler.state_dict()
+
+    torch.save(checkpoint, path)
 
 
 def load_checkpoint(path: str | Path, map_location: str | None = None) -> dict:
