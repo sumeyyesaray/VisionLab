@@ -11,6 +11,8 @@ dependencies = [
     "torch",
     "torchvision",
     "matplotlib",
+    "mlflow",
+    "tensorboard",
 ]
 
 [tool.setuptools.packages.find]

@@ -1,3 +1,4 @@
+import os
 from contextlib import contextmanager
 
 import mlflow
@@ -8,7 +9,9 @@ import mlflow
 # mishandles and turns into a literal, non-existent directory name — use an
 # explicit relative sqlite path instead to sidestep it entirely (MLflow 3.x
 # requires a database backend; the plain filesystem store is deprecated).
-mlflow.set_tracking_uri("sqlite:///mlflow.db")
+# Overridable via MLFLOW_TRACKING_URI (e.g. a Google Drive path in Colab,
+# where the local disk doesn't survive past the session).
+mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"))
 
 
 @contextmanager

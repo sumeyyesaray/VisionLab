@@ -5,4 +5,6 @@ pyyaml
 torch
 torchvision
 matplotlib
+mlflow
+tensorboard
 ipykernel
