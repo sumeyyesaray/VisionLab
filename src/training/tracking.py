@@ -22,13 +22,26 @@ def mlflow_run(experiment_name: str, run_name: str, params: dict):
         yield run
 
 
-def log_epoch_metrics(epoch: int, train_metrics: dict, val_metrics: dict) -> None:
-    mlflow.log_metrics(
-        {
-            "train_loss": train_metrics["loss"],
-            "train_accuracy": train_metrics["accuracy"],
-            "val_loss": val_metrics["loss"],
-            "val_accuracy": val_metrics["accuracy"],
-        },
-        step=epoch,
-    )
+def log_epoch_metrics(
+    epoch: int, train_metrics: dict, val_metrics: dict, extra_metrics: dict | None = None
+) -> None:
+    metrics = {
+        "train_loss": train_metrics["loss"],
+        "train_accuracy": train_metrics["accuracy"],
+        "val_loss": val_metrics["loss"],
+        "val_accuracy": val_metrics["accuracy"],
+    }
+    if extra_metrics:
+        metrics.update(extra_metrics)
+    mlflow.log_metrics(metrics, step=epoch)
+
+
+def log_run_duration(seconds: float) -> None:
+    mlflow.log_metric("run_duration_seconds", seconds)
+
+
+def log_evaluation_report(report: dict) -> None:
+    """Logs macro-F1 as a metric and the worst-classes / most-confused-pairs
+    breakdown as a JSON artifact (too detailed to be a scalar metric)."""
+    mlflow.log_metric("val_macro_f1_final", report["macro_f1"])
+    mlflow.log_dict(report, "evaluation_report.json")

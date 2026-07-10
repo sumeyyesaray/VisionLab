@@ -13,6 +13,7 @@ dependencies = [
     "matplotlib",
     "mlflow",
     "tensorboard",
+    "scikit-learn",
 ]
 
 [tool.setuptools.packages.find]

@@ -15,6 +15,8 @@ state) after every epoch; continue an interrupted run with --resume <path>.
 """
 
 import argparse
+import json
+import os
 import time
 from contextlib import nullcontext
 from pathlib import Path
@@ -26,13 +28,20 @@ from torch.utils.tensorboard import SummaryWriter
 from src.data.config import load_config
 from src.data.dataloader import build_dataloader, build_pipeline
 from src.data.dataset import ImageClassificationDataset
+from src.data.label_map import invert_label_map
 from src.data.sampling import subsample_per_class
+from src.evaluation.metrics import build_evaluation_report, macro_f1_score
 from src.models.checkpoint import load_checkpoint, save_checkpoint
 from src.models.registry import build_model
 from src.training.engine import evaluate, train_one_epoch
 from src.training.losses import build_loss, compute_class_weights
 from src.training.optimizers import build_optimizer
-from src.training.tracking import log_epoch_metrics, mlflow_run
+from src.training.tracking import (
+    log_epoch_metrics,
+    log_evaluation_report,
+    log_run_duration,
+    mlflow_run,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -87,6 +96,7 @@ def main() -> None:
 
     pipeline = build_pipeline(config)
     num_classes = len(pipeline["label_map"])
+    idx_to_label = invert_label_map(pipeline["label_map"])
     train_dataset, val_dataset = build_datasets(pipeline, args)
     print(f"Training on {len(train_dataset)} images, validating on {len(val_dataset)}")
 
@@ -139,7 +149,12 @@ def main() -> None:
 
     tb_writer = None
     if not args.no_tensorboard:
-        tb_log_dir = Path("runs") / f"{dataset_type}_{model_config['name']}"
+        # A unique subdirectory per run — reusing the same logdir across runs
+        # makes TensorBoard treat the new run as a "restart" of the old one
+        # (step counter resets to 0) and purge the previous run's scalars
+        # from view entirely, even though the old event file is untouched.
+        run_id = os.environ.get("SLURM_JOB_ID", time.strftime("%Y%m%d-%H%M%S"))
+        tb_log_dir = Path("runs") / f"{dataset_type}_{model_config['name']}" / run_id
         tb_writer = SummaryWriter(log_dir=str(tb_log_dir))
 
     run_params = {
@@ -157,17 +172,21 @@ def main() -> None:
         else mlflow_run("visionlab", f"{dataset_type}_{model_config['name']}", run_params)
     )
 
+    run_start = time.perf_counter()
+    val_metrics = None
     with tracking_context:
         for epoch in range(start_epoch, epochs):
             epoch_start = time.perf_counter()
             train_metrics = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler=scaler)
             val_metrics = evaluate(model, val_loader, criterion, device, use_amp=use_amp)
             elapsed = time.perf_counter() - epoch_start
+            val_macro_f1 = macro_f1_score(val_metrics["y_true"], val_metrics["y_pred"])
 
             print(
                 f"epoch {epoch + 1}/{epochs} | "
                 f"train_loss={train_metrics['loss']:.4f} train_acc={train_metrics['accuracy']:.4f} | "
-                f"val_loss={val_metrics['loss']:.4f} val_acc={val_metrics['accuracy']:.4f} | "
+                f"val_loss={val_metrics['loss']:.4f} val_acc={val_metrics['accuracy']:.4f} "
+                f"val_macro_f1={val_macro_f1:.4f} | "
                 f"{elapsed:.1f}s"
             )
 
@@ -176,9 +195,16 @@ def main() -> None:
                 tb_writer.add_scalar("loss/val", val_metrics["loss"], epoch)
                 tb_writer.add_scalar("accuracy/train", train_metrics["accuracy"], epoch)
                 tb_writer.add_scalar("accuracy/val", val_metrics["accuracy"], epoch)
+                tb_writer.add_scalar("f1/val_macro", val_macro_f1, epoch)
+                tb_writer.add_scalar("time/epoch_seconds", elapsed, epoch)
 
             if not args.no_mlflow:
-                log_epoch_metrics(epoch, train_metrics, val_metrics)
+                log_epoch_metrics(
+                    epoch,
+                    train_metrics,
+                    val_metrics,
+                    extra_metrics={"val_macro_f1": val_macro_f1, "epoch_duration_seconds": elapsed},
+                )
 
             save_checkpoint(
                 model,
@@ -190,6 +216,33 @@ def main() -> None:
                 optimizer=optimizer,
                 scaler=scaler,
             )
+
+        run_duration = time.perf_counter() - run_start
+        if val_metrics is not None:
+            report = build_evaluation_report(val_metrics["y_true"], val_metrics["y_pred"], idx_to_label)
+            report_path = Path("outputs/reports") / f"{dataset_type}_{model_config['name']}_eval_report.json"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(report, f, ensure_ascii=False, indent=2)
+
+            print(f"\nMacro-F1 (final epoch, val): {report['macro_f1']:.4f}")
+            print("Worst 10 classes (by F1):")
+            for row in report["worst_classes"]:
+                print(
+                    f"  {row['label']:<40} precision={row['precision']:.3f} "
+                    f"recall={row['recall']:.3f} f1={row['f1']:.3f} support={row['support']}"
+                )
+            print("Top 10 confused class pairs (true -> predicted, count):")
+            for row in report["top_confused_pairs"]:
+                print(f"  {row['true_label']} -> {row['predicted_label']}: {row['count']}")
+            print(f"Full report saved to {report_path}")
+
+            if not args.no_mlflow:
+                log_evaluation_report(report)
+
+        if not args.no_mlflow:
+            log_run_duration(run_duration)
+        print(f"\nTotal run duration: {run_duration:.1f}s")
 
     if tb_writer is not None:
         tb_writer.close()
