@@ -57,8 +57,8 @@ sbatch scripts/train_truba.sbatch configs/flower.yaml 15
 ```
 
 Check status with `squeue -u $USER`. Output/errors land in `logs/`. Checkpoints go to
-`outputs/checkpoints/` and TensorBoard logs to `runs/` — both under `/arf`, so they persist
-regardless of what happens to the job.
+`outputs/checkpoints/` under `/arf`, so they persist regardless of what happens to the job.
+Training metrics stream live to Weights & Biases (see section 6) as the job runs.
 
 GPU partitions on this cluster: `akya-cuda` (4 GPUs/node) and `barbun-cuda` (2 GPUs/node),
 both with a 3-day walltime limit. The submitted script requests 1 GPU and 1 day; adjust
@@ -88,20 +88,20 @@ exit   # release the allocation when done
 
 ## 6. Monitoring training
 
-Colab renders TensorBoard inline; on TRUBA, forward a port over SSH instead. From your local
-machine:
+Training logs to [Weights & Biases](https://wandb.ai) (project `visionlab`) — no port
+forwarding needed, just open the run's URL (printed to `logs/<job>.out` at startup, and in
+your W&B dashboard) in any browser. Each run is named
+`{dataset}_{model}_{subset_label}_ep{epochs}_{job_id}` so it's identifiable without cross
+referencing `docs/training_run_log.md`.
+
+One-time setup (per machine/account), so `sbatch` jobs authenticate automatically without
+needing a key hardcoded anywhere:
 
 ```bash
-ssh -L 6006:localhost:6006 hasozkan@arf-ui1
-```
-
-Then on the login node:
-
-```bash
-module load apps/truba-ai/gpu-2024.0
+module load apps/truba-ai/cpu-2024.0   # or gpu-2024.0 on a GPU partition
 conda activate visionlab
-tensorboard --logdir runs --port 6006
+wandb login   # paste your API key from wandb.ai/authorize — stored in ~/.netrc
 ```
 
-Open `http://localhost:6006` locally. Same idea for MLflow (`mlflow ui --backend-store-uri
-sqlite:///<path>`, forwarding its default port 5000 instead).
+To disable W&B for a one-off run (e.g. a smoke test), pass `--no-wandb` to
+`scripts/train_baseline.py`.

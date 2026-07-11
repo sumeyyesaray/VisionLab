@@ -155,11 +155,28 @@ setup rather than a real signal.
 - Validated with two smoke-test jobs (50 and 200 image subsets, with and without MLflow) before
   submitting real runs
 
-## Run 2 — in progress
+## Run 2 — completed (mushroom job 6066357, flower job 6066358)
 
-- Mushroom: same 300/class subset, 6 epochs (job 6066357) — run again so results are comparable
-  to Run 1 with the new metrics attached
-- Flower: full dataset (6,552 train / 818 val), 6 epochs (job 6066358) — first real run with
-  macro-F1 (mandatory for this dataset per the current requirements)
-- New artifacts per run: `outputs/reports/{dataset}_{model}_eval_report.json`,
-  MLflow `run_duration_seconds` + `evaluation_report.json` artifact
+New artifacts per run: `outputs/reports/{dataset}_{model}_eval_report.json`, plus MLflow
+`run_duration_seconds` and an `evaluation_report.json` artifact.
+
+### Mushroom (300/class subset, same as Run 1, now with the new metrics)
+
+- Duration: 13081.5s (3h38m), 56 CPU cores (`orfoz274`)
+- train_acc 95.2%, val_acc 80.2%, **macro-F1 0.7596** (final epoch)
+- Unlike Run 1, val_acc keeps improving through epoch 6 instead of peaking at epoch 3 — less
+  overfitting this time (run-to-run variance from weight init / data shuffling, same subset size)
+- Worst-10 classes are mostly lichens, not true mushrooms (Fomitopsis mounceae F1 0.385,
+  Boletus reticulatus 0.395, Phaeophyscia orbicularis 0.451, …) — support 35-83 images each
+- Top confused pair: Xanthoria parietina → Vulpicida pinastri (66 misclassifications) — both
+  lichens, visually similar; several Fomitopsis/Fomes pairs also recur
+
+### Flower (full dataset: 6,552 train / 818 val, first real run with macro-F1)
+
+- Duration: 1451.0s (24m), 56 CPU cores (`orfoz286`)
+- train_acc 97.8%, val_acc 97.8%, **macro-F1 0.9726** (final epoch) — strong result on the full
+  dataset, consistent with Sprint 4's EfficientNet research note (up to 98.8% reported achievable)
+- Worst-10 classes are almost entirely low-support ones (canterbury bells support=2, monkshood
+  support=3, …) — F1 noise from small sample size, not a systematic weakness
+- Top confused pairs are all single-count, isolated misclassifications — no dataset-wide
+  confusion pattern like mushroom's lichen pairs

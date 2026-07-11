@@ -1,25 +1,15 @@
-import os
 from contextlib import contextmanager
 
-import mlflow
-
-# MLflow's default tracking URI resolves to an absolute sqlite path built
-# from the current working directory. On this machine that path contains a
-# non-ASCII character (the Windows username), which MLflow's URI encoding
-# mishandles and turns into a literal, non-existent directory name — use an
-# explicit relative sqlite path instead to sidestep it entirely (MLflow 3.x
-# requires a database backend; the plain filesystem store is deprecated).
-# Overridable via MLFLOW_TRACKING_URI (e.g. a Google Drive path in Colab,
-# where the local disk doesn't survive past the session).
-mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"))
+import wandb
 
 
 @contextmanager
-def mlflow_run(experiment_name: str, run_name: str, params: dict):
-    mlflow.set_experiment(experiment_name)
-    with mlflow.start_run(run_name=run_name) as run:
-        mlflow.log_params(params)
+def wandb_run(project_name: str, run_name: str, params: dict):
+    run = wandb.init(project=project_name, name=run_name, config=params)
+    try:
         yield run
+    finally:
+        wandb.finish()
 
 
 def log_epoch_metrics(
@@ -33,15 +23,27 @@ def log_epoch_metrics(
     }
     if extra_metrics:
         metrics.update(extra_metrics)
-    mlflow.log_metrics(metrics, step=epoch)
+    wandb.log(metrics, step=epoch)
 
 
 def log_run_duration(seconds: float) -> None:
-    mlflow.log_metric("run_duration_seconds", seconds)
+    wandb.run.summary["run_duration_seconds"] = seconds
 
 
 def log_evaluation_report(report: dict) -> None:
-    """Logs macro-F1 as a metric and the worst-classes / most-confused-pairs
-    breakdown as a JSON artifact (too detailed to be a scalar metric)."""
-    mlflow.log_metric("val_macro_f1_final", report["macro_f1"])
-    mlflow.log_dict(report, "evaluation_report.json")
+    """Logs macro-F1 as a summary metric and the worst-classes /
+    most-confused-pairs breakdown as W&B tables — sortable/filterable in
+    the dashboard, unlike a flat JSON artifact."""
+    wandb.run.summary["val_macro_f1_final"] = report["macro_f1"]
+
+    worst_classes_table = wandb.Table(columns=["label", "precision", "recall", "f1", "support"])
+    for row in report["worst_classes"]:
+        worst_classes_table.add_data(
+            row["label"], row["precision"], row["recall"], row["f1"], row["support"]
+        )
+
+    confused_pairs_table = wandb.Table(columns=["true_label", "predicted_label", "count"])
+    for row in report["top_confused_pairs"]:
+        confused_pairs_table.add_data(row["true_label"], row["predicted_label"], row["count"])
+
+    wandb.log({"worst_classes": worst_classes_table, "top_confused_pairs": confused_pairs_table})

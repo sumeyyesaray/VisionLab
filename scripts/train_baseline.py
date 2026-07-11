@@ -8,10 +8,9 @@ Wrapped in `if __name__ == "__main__":` because the configs use
 `num_workers > 0` — on Windows, multiprocessing's "spawn" start method
 requires this guard (see scripts/check_pipeline.py).
 
-Logs to MLflow (`mlflow ui` to view) and TensorBoard (`tensorboard
---logdir=runs`) by default — disable either with --no-mlflow /
---no-tensorboard. Saves a resumable checkpoint (model + optimizer + scaler
-state) after every epoch; continue an interrupted run with --resume <path>.
+Logs to Weights & Biases (wandb.ai) by default — disable with --no-wandb.
+Saves a resumable checkpoint (model + optimizer + scaler state) after
+every epoch; continue an interrupted run with --resume <path>.
 """
 
 import argparse
@@ -23,7 +22,6 @@ from pathlib import Path
 
 import torch
 from torch.utils.data import Subset
-from torch.utils.tensorboard import SummaryWriter
 
 from src.data.config import load_config
 from src.data.dataloader import build_dataloader, build_pipeline
@@ -40,7 +38,7 @@ from src.training.tracking import (
     log_epoch_metrics,
     log_evaluation_report,
     log_run_duration,
-    mlflow_run,
+    wandb_run,
 )
 
 
@@ -61,8 +59,7 @@ def parse_args() -> argparse.Namespace:
         help="Stratified subset: up to N training images per class",
     )
     parser.add_argument("--resume", type=str, default=None, help="Path to a checkpoint to resume from")
-    parser.add_argument("--no-mlflow", action="store_true", help="Disable MLflow logging")
-    parser.add_argument("--no-tensorboard", action="store_true", help="Disable TensorBoard logging")
+    parser.add_argument("--no-wandb", action="store_true", help="Disable Weights & Biases logging")
     return parser.parse_args()
 
 
@@ -147,29 +144,23 @@ def main() -> None:
     epochs = args.epochs if args.epochs is not None else training_config["epochs"]
     checkpoint_path = Path("outputs/checkpoints") / f"{dataset_type}_{model_config['name']}.pt"
 
-    tb_writer = None
-    if not args.no_tensorboard:
-        # A unique subdirectory per run — reusing the same logdir across runs
-        # makes TensorBoard treat the new run as a "restart" of the old one
-        # (step counter resets to 0) and purge the previous run's scalars
-        # from view entirely, even though the old event file is untouched.
-        run_id = os.environ.get("SLURM_JOB_ID", time.strftime("%Y%m%d-%H%M%S"))
-        tb_log_dir = Path("runs") / f"{dataset_type}_{model_config['name']}" / run_id
-        tb_writer = SummaryWriter(log_dir=str(tb_log_dir))
+    run_id = os.environ.get("SLURM_JOB_ID", time.strftime("%Y%m%d-%H%M%S"))
+    subset_label = f"subset{args.subset_per_class}" if args.subset_per_class is not None else "full"
+    run_name = f"{dataset_type}_{model_config['name']}_{subset_label}_ep{epochs}_{run_id}"
 
     run_params = {
         "model": model_config["name"],
         "dataset": dataset_type,
         "batch_size": config["batch_size"],
         "lr": training_config["lr"],
+        "epochs": epochs,
+        "subset_per_class": args.subset_per_class,
         "augmentation_preset": config["augmentation_preset"],
         "class_weighted_loss": training_config["class_weighted_loss"],
         "mixed_precision": use_amp,
     }
     tracking_context = (
-        nullcontext()
-        if args.no_mlflow
-        else mlflow_run("visionlab", f"{dataset_type}_{model_config['name']}", run_params)
+        nullcontext() if args.no_wandb else wandb_run("visionlab", run_name, run_params)
     )
 
     run_start = time.perf_counter()
@@ -190,15 +181,7 @@ def main() -> None:
                 f"{elapsed:.1f}s"
             )
 
-            if tb_writer is not None:
-                tb_writer.add_scalar("loss/train", train_metrics["loss"], epoch)
-                tb_writer.add_scalar("loss/val", val_metrics["loss"], epoch)
-                tb_writer.add_scalar("accuracy/train", train_metrics["accuracy"], epoch)
-                tb_writer.add_scalar("accuracy/val", val_metrics["accuracy"], epoch)
-                tb_writer.add_scalar("f1/val_macro", val_macro_f1, epoch)
-                tb_writer.add_scalar("time/epoch_seconds", elapsed, epoch)
-
-            if not args.no_mlflow:
+            if not args.no_wandb:
                 log_epoch_metrics(
                     epoch,
                     train_metrics,
@@ -237,15 +220,12 @@ def main() -> None:
                 print(f"  {row['true_label']} -> {row['predicted_label']}: {row['count']}")
             print(f"Full report saved to {report_path}")
 
-            if not args.no_mlflow:
+            if not args.no_wandb:
                 log_evaluation_report(report)
 
-        if not args.no_mlflow:
+        if not args.no_wandb:
             log_run_duration(run_duration)
         print(f"\nTotal run duration: {run_duration:.1f}s")
-
-    if tb_writer is not None:
-        tb_writer.close()
 
     print(f"Checkpoint saved to {checkpoint_path}")
 
