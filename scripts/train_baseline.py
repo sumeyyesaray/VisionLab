@@ -127,6 +127,11 @@ def main() -> None:
 
     criterion = build_loss(training_config["loss"], weight=weight)
     optimizer = build_optimizer(training_config["optimizer"], model.parameters(), lr=training_config["lr"])
+    lr_scheduler_patience = training_config.get("lr_scheduler_patience", 2)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=lr_scheduler_patience
+    )
+    early_stopping_patience = training_config.get("early_stopping_patience", 5)
 
     use_amp = training_config.get("mixed_precision", False) and device.type == "cuda"
     scaler = torch.amp.GradScaler(device.type) if use_amp else None
@@ -143,9 +148,15 @@ def main() -> None:
 
     epochs = args.epochs if args.epochs is not None else training_config["epochs"]
     checkpoint_path = Path("outputs/checkpoints") / f"{dataset_type}_{model_config['name']}.pt"
+    best_checkpoint_path = Path("outputs/checkpoints") / f"{dataset_type}_{model_config['name']}_best.pt"
 
     run_id = os.environ.get("SLURM_JOB_ID", time.strftime("%Y%m%d-%H%M%S"))
-    subset_label = f"subset{args.subset_per_class}" if args.subset_per_class is not None else "full"
+    if args.subset_per_class is not None:
+        subset_label = f"subset{args.subset_per_class}"
+    elif args.limit is not None:
+        subset_label = f"limit{args.limit}"
+    else:
+        subset_label = "full"
     run_name = f"{dataset_type}_{model_config['name']}_{subset_label}_ep{epochs}_{run_id}"
 
     run_params = {
@@ -155,9 +166,14 @@ def main() -> None:
         "lr": training_config["lr"],
         "epochs": epochs,
         "subset_per_class": args.subset_per_class,
+        "limit": args.limit,
+        "actual_train_size": len(train_dataset),
+        "actual_val_size": len(val_dataset),
         "augmentation_preset": config["augmentation_preset"],
         "class_weighted_loss": training_config["class_weighted_loss"],
         "mixed_precision": use_amp,
+        "early_stopping_patience": early_stopping_patience,
+        "lr_scheduler_patience": lr_scheduler_patience,
     }
     tracking_context = (
         nullcontext() if args.no_wandb else wandb_run("visionlab", run_name, run_params)
@@ -165,6 +181,9 @@ def main() -> None:
 
     run_start = time.perf_counter()
     val_metrics = None
+    best_val_metrics = None
+    best_val_loss = float("inf")
+    epochs_without_improvement = 0
     with tracking_context:
         for epoch in range(start_epoch, epochs):
             epoch_start = time.perf_counter()
@@ -172,12 +191,14 @@ def main() -> None:
             val_metrics = evaluate(model, val_loader, criterion, device, use_amp=use_amp)
             elapsed = time.perf_counter() - epoch_start
             val_macro_f1 = macro_f1_score(val_metrics["y_true"], val_metrics["y_pred"])
+            scheduler.step(val_metrics["loss"])
+            current_lr = optimizer.param_groups[0]["lr"]
 
             print(
                 f"epoch {epoch + 1}/{epochs} | "
                 f"train_loss={train_metrics['loss']:.4f} train_acc={train_metrics['accuracy']:.4f} | "
                 f"val_loss={val_metrics['loss']:.4f} val_acc={val_metrics['accuracy']:.4f} "
-                f"val_macro_f1={val_macro_f1:.4f} | "
+                f"val_macro_f1={val_macro_f1:.4f} lr={current_lr:.2e} | "
                 f"{elapsed:.1f}s"
             )
 
@@ -186,7 +207,11 @@ def main() -> None:
                     epoch,
                     train_metrics,
                     val_metrics,
-                    extra_metrics={"val_macro_f1": val_macro_f1, "epoch_duration_seconds": elapsed},
+                    extra_metrics={
+                        "val_macro_f1": val_macro_f1,
+                        "epoch_duration_seconds": elapsed,
+                        "lr": current_lr,
+                    },
                 )
 
             save_checkpoint(
@@ -200,15 +225,38 @@ def main() -> None:
                 scaler=scaler,
             )
 
+            if val_metrics["loss"] < best_val_loss:
+                best_val_loss = val_metrics["loss"]
+                best_val_metrics = val_metrics
+                epochs_without_improvement = 0
+                save_checkpoint(
+                    model,
+                    best_checkpoint_path,
+                    architecture=model_config["name"],
+                    dataset_type=dataset_type,
+                    label_map_path=config["label_map_path"],
+                    epoch=epoch,
+                )
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= early_stopping_patience:
+                    print(
+                        f"\nEarly stopping: val_loss hasn't improved for "
+                        f"{early_stopping_patience} epochs (best={best_val_loss:.4f})"
+                    )
+                    break
+
         run_duration = time.perf_counter() - run_start
-        if val_metrics is not None:
-            report = build_evaluation_report(val_metrics["y_true"], val_metrics["y_pred"], idx_to_label)
+        if best_val_metrics is not None:
+            report = build_evaluation_report(
+                best_val_metrics["y_true"], best_val_metrics["y_pred"], idx_to_label
+            )
             report_path = Path("outputs/reports") / f"{dataset_type}_{model_config['name']}_eval_report.json"
             report_path.parent.mkdir(parents=True, exist_ok=True)
             with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, ensure_ascii=False, indent=2)
 
-            print(f"\nMacro-F1 (final epoch, val): {report['macro_f1']:.4f}")
+            print(f"\nMacro-F1 (best epoch, val_loss={best_val_loss:.4f}): {report['macro_f1']:.4f}")
             print("Worst 10 classes (by F1):")
             for row in report["worst_classes"]:
                 print(
@@ -227,7 +275,8 @@ def main() -> None:
             log_run_duration(run_duration)
         print(f"\nTotal run duration: {run_duration:.1f}s")
 
-    print(f"Checkpoint saved to {checkpoint_path}")
+    print(f"Latest checkpoint saved to {checkpoint_path}")
+    print(f"Best checkpoint (val_loss={best_val_loss:.4f}) saved to {best_checkpoint_path}")
 
 
 if __name__ == "__main__":

@@ -92,7 +92,7 @@ Training logs to [Weights & Biases](https://wandb.ai) (project `visionlab`) — 
 forwarding needed, just open the run's URL (printed to `logs/<job>.out` at startup, and in
 your W&B dashboard) in any browser. Each run is named
 `{dataset}_{model}_{subset_label}_ep{epochs}_{job_id}` so it's identifiable without cross
-referencing `docs/training_run_log.md`.
+referencing `notebooks/07_training_run_log.ipynb`.
 
 One-time setup (per machine/account), so `sbatch` jobs authenticate automatically without
 needing a key hardcoded anywhere:

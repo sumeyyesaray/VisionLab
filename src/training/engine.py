@@ -10,11 +10,16 @@ def train_one_epoch(
     criterion: nn.Module,
     device: torch.device,
     scaler: "torch.amp.GradScaler | None" = None,
+    grad_clip_max_norm: float = 1.0,
 ) -> dict:
     """`scaler` is only needed for mixed precision — pass a
     `torch.amp.GradScaler` to train in fp16/bf16 autocast, or leave it
     `None` for plain fp32. VRAM is tight on a 4GB card (RTX 3050), so AMP
     matters more here than it would on a larger GPU.
+
+    Gradients are clipped to `grad_clip_max_norm` before every optimizer
+    step — a cheap guard against occasional loss spikes destabilizing
+    training; pass `None` to disable.
     """
     model.train()
     total_loss = 0.0
@@ -33,10 +38,15 @@ def train_one_epoch(
 
         if use_amp:
             scaler.scale(loss).backward()
+            if grad_clip_max_norm is not None:
+                scaler.unscale_(optimizer)
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_max_norm)
             scaler.step(optimizer)
             scaler.update()
         else:
             loss.backward()
+            if grad_clip_max_norm is not None:
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_max_norm)
             optimizer.step()
 
         total_loss += loss.item() * images.size(0)

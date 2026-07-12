@@ -9,7 +9,7 @@ label_map_path: configs/label_maps/mushroom_label_map.json
 image_size: 224
 batch_size: 16
 num_workers: 4
-pin_memory: true # meaningful now that training runs on the RTX 3050 (CUDA)
+pin_memory: false # only helps on CUDA; training runs on CPU (TRUBA orfoz partition)
 
 augmentation_preset: light
 random_resized_crop_scale: [0.9, 1.0]
@@ -24,12 +24,14 @@ model:
   freeze_backbone: false # default to fine-tune, per Reading Note 1 (Yosinski et al.)
 
 # Mushroom is balanced (std=0 in Sprint 1) — no class weighting needed.
-# epochs/lr here are for the small-subset first real run, not full training —
-# see notebooks/06_first_real_training_run.ipynb.
+# epochs is a high ceiling — early_stopping_patience decides the actual stop,
+# not this number (see scripts/train_baseline.py).
 training:
   loss: cross_entropy
   class_weighted_loss: false
   optimizer: adamw
   lr: 0.0001
-  epochs: 6
-  mixed_precision: true # matters on a 4GB card (RTX 3050)
+  epochs: 30
+  early_stopping_patience: 5 # stop if val_loss hasn't improved in this many epochs
+  lr_scheduler_patience: 2 # ReduceLROnPlateau: halve lr if val_loss plateaus this long
+  mixed_precision: true # only takes effect on CUDA; no-op on CPU
