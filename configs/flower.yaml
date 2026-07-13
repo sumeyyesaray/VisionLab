@@ -33,6 +33,6 @@ training:
   optimizer: adamw
   lr: 0.0001
   epochs: 30
-  early_stopping_patience: 5 # stop if val_loss hasn't improved in this many epochs
+  early_stopping_patience: 5 # stop if val_macro_f1 hasn't improved in this many epochs
   lr_scheduler_patience: 2 # ReduceLROnPlateau: halve lr if val_loss plateaus this long
   mixed_precision: true # only takes effect on CUDA; no-op on CPU

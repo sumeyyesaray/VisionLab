@@ -21,6 +21,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=56
+#SBATCH --exclusive # avoid node-sharing contention (Run 4: another job's 5 cores on
+                     # the same node ~doubled our epoch time) — reserve the whole node
 #SBATCH --time=3-00:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err

@@ -1,7 +1,10 @@
-# Mushroom dataset is balanced and large (4080 images/class) — augmentation
-# here is for regularization/robustness, not for fixing imbalance. Kept
-# conservative (light preset, narrow crop scale) until the near-duplicate
-# question from Sprint 1 is resolved. See notebooks/01_mushroom_dataset_exploration.ipynb.
+# Mushroom dataset is balanced and large (4080 images/class) in full — original
+# augmentation choice here (light preset, narrow crop scale) assumed that
+# abundance. But Run 1-4 only ever trained on a 300/class subset, where that
+# assumption doesn't hold, and Run 3/4 showed clear overfitting (train_acc
+# ~99.9% vs val_acc ~84%). Bumped to `medium` to actually regularize at this
+# subset size — see notebooks/07_training_run_log.ipynb, Run 4. Revisit if/when
+# training moves to the full 4080/class dataset.
 dataset_type: mushroom
 dataset_root: datasets/extracted/mushroom
 label_map_path: configs/label_maps/mushroom_label_map.json
@@ -11,7 +14,7 @@ batch_size: 16
 num_workers: 4
 pin_memory: false # only helps on CUDA; training runs on CPU (TRUBA orfoz partition)
 
-augmentation_preset: light
+augmentation_preset: medium
 random_resized_crop_scale: [0.9, 1.0]
 
 # ResNet-50 chosen first per the Sprint 4 model research wrap-up (lowest-risk
@@ -31,7 +34,13 @@ training:
   class_weighted_loss: false
   optimizer: adamw
   lr: 0.0001
+  weight_decay: 0.05 # up from AdamW's 0.01 default — stronger L2 regularization, same overfitting fix
+  label_smoothing: 0.1 # softens target confidence; also addresses Run 4's val_loss/accuracy divergence
   epochs: 30
-  early_stopping_patience: 5 # stop if val_loss hasn't improved in this many epochs
+  # 5 was too tight here: Run 3 stopped at epoch 7 with best-by-val_loss at epoch 2, but
+  # val_macro_f1 kept climbing through epoch 7 (0.73 -> 0.79) — val_loss and accuracy diverged
+  # (likely growing prediction confidence, not just correctness). Now selecting/stopping on
+  # val_macro_f1 instead (see scripts/train_baseline.py), with room to keep improving longer.
+  early_stopping_patience: 8 # stop if val_macro_f1 hasn't improved in this many epochs
   lr_scheduler_patience: 2 # ReduceLROnPlateau: halve lr if val_loss plateaus this long
   mixed_precision: true # only takes effect on CUDA; no-op on CPU

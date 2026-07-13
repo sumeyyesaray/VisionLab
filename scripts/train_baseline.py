@@ -125,8 +125,17 @@ def main() -> None:
         label_counts = pipeline["frames"]["train"]["label"].value_counts().to_dict()
         weight = compute_class_weights(label_counts, pipeline["label_map"]).to(device)
 
-    criterion = build_loss(training_config["loss"], weight=weight)
-    optimizer = build_optimizer(training_config["optimizer"], model.parameters(), lr=training_config["lr"])
+    criterion = build_loss(
+        training_config["loss"],
+        weight=weight,
+        label_smoothing=training_config.get("label_smoothing", 0.0),
+    )
+    optimizer = build_optimizer(
+        training_config["optimizer"],
+        model.parameters(),
+        lr=training_config["lr"],
+        weight_decay=training_config.get("weight_decay", 0.01),
+    )
     lr_scheduler_patience = training_config.get("lr_scheduler_patience", 2)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=lr_scheduler_patience
@@ -174,6 +183,8 @@ def main() -> None:
         "mixed_precision": use_amp,
         "early_stopping_patience": early_stopping_patience,
         "lr_scheduler_patience": lr_scheduler_patience,
+        "weight_decay": training_config.get("weight_decay", 0.01),
+        "label_smoothing": training_config.get("label_smoothing", 0.0),
     }
     tracking_context = (
         nullcontext() if args.no_wandb else wandb_run("visionlab", run_name, run_params)
@@ -182,7 +193,7 @@ def main() -> None:
     run_start = time.perf_counter()
     val_metrics = None
     best_val_metrics = None
-    best_val_loss = float("inf")
+    best_val_macro_f1 = -1.0
     epochs_without_improvement = 0
     with tracking_context:
         for epoch in range(start_epoch, epochs):
@@ -225,8 +236,8 @@ def main() -> None:
                 scaler=scaler,
             )
 
-            if val_metrics["loss"] < best_val_loss:
-                best_val_loss = val_metrics["loss"]
+            if val_macro_f1 > best_val_macro_f1:
+                best_val_macro_f1 = val_macro_f1
                 best_val_metrics = val_metrics
                 epochs_without_improvement = 0
                 save_checkpoint(
@@ -241,8 +252,8 @@ def main() -> None:
                 epochs_without_improvement += 1
                 if epochs_without_improvement >= early_stopping_patience:
                     print(
-                        f"\nEarly stopping: val_loss hasn't improved for "
-                        f"{early_stopping_patience} epochs (best={best_val_loss:.4f})"
+                        f"\nEarly stopping: val_macro_f1 hasn't improved for "
+                        f"{early_stopping_patience} epochs (best={best_val_macro_f1:.4f})"
                     )
                     break
 
@@ -256,7 +267,7 @@ def main() -> None:
             with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, ensure_ascii=False, indent=2)
 
-            print(f"\nMacro-F1 (best epoch, val_loss={best_val_loss:.4f}): {report['macro_f1']:.4f}")
+            print(f"\nMacro-F1 (best epoch by val_macro_f1): {report['macro_f1']:.4f}")
             print("Worst 10 classes (by F1):")
             for row in report["worst_classes"]:
                 print(
@@ -276,7 +287,7 @@ def main() -> None:
         print(f"\nTotal run duration: {run_duration:.1f}s")
 
     print(f"Latest checkpoint saved to {checkpoint_path}")
-    print(f"Best checkpoint (val_loss={best_val_loss:.4f}) saved to {best_checkpoint_path}")
+    print(f"Best checkpoint (val_macro_f1={best_val_macro_f1:.4f}) saved to {best_checkpoint_path}")
 
 
 if __name__ == "__main__":
