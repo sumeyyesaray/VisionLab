@@ -1,20 +1,24 @@
 # Mushroom dataset is balanced and large (4080 images/class) in full — original
 # augmentation choice here (light preset, narrow crop scale) assumed that
-# abundance. But Run 1-4 only ever trained on a 300/class subset, where that
-# assumption doesn't hold, and Run 3/4 showed clear overfitting (train_acc
-# ~99.9% vs val_acc ~84%). Bumped to `medium` to actually regularize at this
-# subset size — see notebooks/07_training_run_log.ipynb, Run 4. Revisit if/when
-# training moves to the full 4080/class dataset.
+# abundance. Run 5 tried `medium` + weight_decay + label_smoothing to fight
+# Run 3/4's overfitting signature (train_acc ~99.9% vs val_acc ~84%) — it made
+# val_accuracy/macro-F1 slightly *worse*, and the confused-pairs list turned
+# out to be entirely same-genus species (Fomitopsis/Fomitopsis, Amanita/Amanita,
+# ...), not random noise. See notebooks/08_mushroom_confusion_diagnosis.ipynb —
+# Grad-CAM shows the model looking at the right structures and still failing,
+# which points at a fine-grained-discrimination limit, not overfitting. Reverted
+# augmentation/weight_decay/label_smoothing to Run 4's settings here and bumped
+# image_size 224->384 instead, to isolate resolution as the one changed variable.
 dataset_type: mushroom
 dataset_root: datasets/extracted/mushroom
 label_map_path: configs/label_maps/mushroom_label_map.json
 
-image_size: 224
+image_size: 384
 batch_size: 16
 num_workers: 4
 pin_memory: false # only helps on CUDA; training runs on CPU (TRUBA orfoz partition)
 
-augmentation_preset: medium
+augmentation_preset: light
 random_resized_crop_scale: [0.9, 1.0]
 
 # ResNet-50 chosen first per the Sprint 4 model research wrap-up (lowest-risk
@@ -34,8 +38,8 @@ training:
   class_weighted_loss: false
   optimizer: adamw
   lr: 0.0001
-  weight_decay: 0.05 # up from AdamW's 0.01 default — stronger L2 regularization, same overfitting fix
-  label_smoothing: 0.1 # softens target confidence; also addresses Run 4's val_loss/accuracy divergence
+  # weight_decay/label_smoothing back to defaults (0.01/0.0) — Run 5 showed they don't help;
+  # keeping this run's only change to image_size for a clean isolated comparison against Run 4.
   epochs: 30
   # 5 was too tight here: Run 3 stopped at epoch 7 with best-by-val_loss at epoch 2, but
   # val_macro_f1 kept climbing through epoch 7 (0.73 -> 0.79) — val_loss and accuracy diverged

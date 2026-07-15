@@ -1,8 +1,10 @@
 from src.models.base_model import BaseModel
+from src.models.efficientnet import EfficientNetB3
 from src.models.resnet import ResNet50
 
 MODEL_REGISTRY: dict[str, type[BaseModel]] = {
     "resnet50": ResNet50,
+    "efficientnet_b3": EfficientNetB3,
 }
 
 

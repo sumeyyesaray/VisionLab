@@ -1,0 +1,37 @@
+# EfficientNet-B3 architecture comparison — kept at 224px (not 384, which Run 6 used for
+# ResNet-50) specifically to isolate architecture as the one changed variable against Run 4's
+# ResNet-50/224px/light-augmentation baseline. Question: does EfficientNet-B3 make the same
+# genus-level mistakes (Fomitopsis/Fomitopsis, Amanita/Amanita, Evernia/Evernia, ...) as
+# ResNet-50? If yes, it's a dataset/subset-scale ceiling, not an architecture weakness. See
+# notebooks/08_mushroom_confusion_diagnosis.ipynb. Note: EfficientNet-B3's torchvision weights
+# were trained/calibrated around ~300px, so 224px may undersell it slightly — an accepted
+# tradeoff here for cost control and a clean comparison, not an oversight.
+dataset_type: mushroom
+dataset_root: datasets/extracted/mushroom
+label_map_path: configs/label_maps/mushroom_label_map.json
+
+image_size: 224
+batch_size: 16
+num_workers: 4
+pin_memory: false # only helps on CUDA; training runs on CPU (TRUBA orfoz partition)
+
+augmentation_preset: light
+random_resized_crop_scale: [0.9, 1.0]
+
+model:
+  name: efficientnet_b3
+  pretrained: true
+  freeze_backbone: false # default to fine-tune, matching the ResNet-50 configs
+
+# Mushroom is balanced (std=0 in Sprint 1) — no class weighting needed.
+# epochs is a high ceiling — early_stopping_patience decides the actual stop,
+# not this number (see scripts/train_baseline.py).
+training:
+  loss: cross_entropy
+  class_weighted_loss: false
+  optimizer: adamw
+  lr: 0.0001
+  epochs: 30
+  early_stopping_patience: 8 # stop if val_macro_f1 hasn't improved in this many epochs
+  lr_scheduler_patience: 2 # ReduceLROnPlateau: halve lr if val_loss plateaus this long
+  mixed_precision: true # only takes effect on CUDA; no-op on CPU
