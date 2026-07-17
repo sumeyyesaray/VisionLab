@@ -1,0 +1,30 @@
+# Hierarchical (genus + species) multi-task variant — HierarchicalResNet50
+# (src/models/hierarchical_resnet.py) instead of the single-head ResNet50.
+# Kept at Run 4's settings otherwise (224px, light augmentation, no extra
+# weight decay/label smoothing, same LR schedule) to isolate the hierarchical
+# loss as the one changed variable — see notebooks/08_mushroom_confusion_diagnosis.ipynb.
+# Trained via scripts/train_hierarchical.py, not train_baseline.py.
+dataset_type: mushroom
+dataset_root: datasets/extracted/mushroom
+label_map_path: configs/label_maps/mushroom_label_map.json
+
+image_size: 224
+batch_size: 16
+num_workers: 4
+pin_memory: false # only helps on CUDA; training runs on CPU (TRUBA orfoz partition)
+
+augmentation_preset: light
+random_resized_crop_scale: [0.9, 1.0]
+
+model:
+  name: hierarchical_resnet50
+  genus_label_map_path: configs/label_maps/mushroom_genus_label_map.json
+  pretrained: true
+  freeze_backbone: false
+
+training:
+  optimizer: adamw
+  lr: 0.0001
+  epochs: 30
+  early_stopping_patience: 8 # stop if val species macro_f1 hasn't improved in this many epochs
+  lr_scheduler_patience: 2 # ReduceLROnPlateau: halve lr if (genus_loss + species_loss) plateaus
