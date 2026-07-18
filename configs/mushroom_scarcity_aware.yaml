@@ -1,0 +1,37 @@
+# Identical to Run 6 (configs/mushroom.yaml: 384px, light augmentation, no extra
+# weight_decay/label_smoothing) except for ONE isolated change: the 26 species
+# from notebooks/08_mushroom_confusion_diagnosis.ipynb's "b) veri kıtlığından
+# kötü performans" list (<300 real unique training images, F1<0.80) get `heavy`
+# augmentation instead of `light` — everything else stays untouched. Blanket
+# regularization (Run 5) hurt data-rich classes without meaningfully helping
+# scarce ones; this targets only the classes that actually lack real diversity.
+# See src/data/transforms.py's ScarcityAwareTransform.
+dataset_type: mushroom
+dataset_root: datasets/extracted/mushroom
+label_map_path: configs/label_maps/mushroom_label_map.json
+
+image_size: 384
+batch_size: 16
+num_workers: 4
+pin_memory: false # only helps on CUDA; training runs on CPU (TRUBA orfoz partition)
+
+augmentation_preset: light
+random_resized_crop_scale: [0.9, 1.0]
+
+scarce_species_path: configs/label_maps/mushroom_scarce_species.json
+scarce_augmentation_preset: heavy
+
+model:
+  name: resnet50
+  pretrained: true
+  freeze_backbone: false
+
+training:
+  loss: cross_entropy
+  class_weighted_loss: false
+  optimizer: adamw
+  lr: 0.0001
+  epochs: 30
+  early_stopping_patience: 8 # stop if val_macro_f1 hasn't improved in this many epochs
+  lr_scheduler_patience: 2 # ReduceLROnPlateau: halve lr if val_loss plateaus this long
+  mixed_precision: true # only takes effect on CUDA; no-op on CPU

@@ -49,6 +49,25 @@ def build_train_transform(
     )
 
 
+class ScarcityAwareTransform:
+    """Applies a heavier augmentation transform to a given set of scarce
+    classes and a lighter one to everything else — for datasets like
+    mushroom where nominal per-class row counts are balanced but real
+    unique-image counts aren't (see notebooks/08_mushroom_confusion_diagnosis.ipynb,
+    "Veri Kalitesi Bulguları"). Callers must pass the raw label string
+    alongside the image; see `ImageClassificationDataset.__getitem__`.
+    """
+
+    def __init__(self, scarce_labels: set[str], light_transform, heavy_transform):
+        self.scarce_labels = scarce_labels
+        self.light_transform = light_transform
+        self.heavy_transform = heavy_transform
+
+    def __call__(self, image, label: str):
+        transform = self.heavy_transform if label in self.scarce_labels else self.light_transform
+        return transform(image)
+
+
 def build_val_transform(image_size: int) -> transforms.Compose:
     return transforms.Compose(
         [

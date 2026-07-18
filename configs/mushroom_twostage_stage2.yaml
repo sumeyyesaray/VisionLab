@@ -1,0 +1,31 @@
+# Stage 2: fine-tune Stage 1's checkpoint on only the 26 data-scarce classes, backbone mostly
+# frozen (src/models/resnet.py's freeze_except_last_block — only layer4 + fc train), low LR, few
+# epochs. Run via scripts/train_stage2_finetune.py, not train_baseline.py (different loop:
+# scarce-only training data, full-validation-set evaluation every epoch to catch catastrophic
+# forgetting of the other 143 classes). See notebooks/08_mushroom_confusion_diagnosis.ipynb.
+dataset_type: mushroom
+dataset_root: datasets/extracted/mushroom
+label_map_path: configs/label_maps/mushroom_label_map.json
+scarce_species_path: configs/label_maps/mushroom_scarce_species.json
+checkpoint_name: mushroom_resnet50_twostage_stage2
+
+# Stage 1's best checkpoint — update this if Stage 1 is rerun and produces a new file.
+stage1_checkpoint: outputs/checkpoints/mushroom_resnet50_twostage_stage1_best.pt
+
+image_size: 384
+batch_size: 16
+num_workers: 4
+pin_memory: false
+
+augmentation_preset: light
+random_resized_crop_scale: [0.9, 1.0]
+
+model:
+  name: resnet50
+
+training:
+  optimizer: adamw
+  lr: 0.00001 # 10x lower than stage 1's 1e-4 — small, careful updates to limit drift
+  weight_decay: 0.01
+  epochs: 6
+  early_stopping_patience: 3 # stop if OVERALL (not scarce-only) val_macro_f1 hasn't improved

@@ -1,0 +1,37 @@
+# Calibration follow-up to Run 7 (configs/mushroom_scarcity_aware.yaml). Run 7 gave the 26
+# scarce species (see notebooks/08_mushroom_confusion_diagnosis.ipynb, list b) `heavy`
+# augmentation and made them dramatically worse (e.g. Boletus reticulatus recall dropped to
+# 0.053) — likely because `heavy`'s ±25° rotation + RandomPerspective(0.2) destroyed fine
+# distinguishing detail on already-hard-to-separate species. This tests whether the scarcity-
+# aware *hypothesis* was wrong, or just the severity: `medium` (±15° rotation, moderate color
+# jitter, no perspective warp) instead of `heavy` for the same 26 classes, everything else
+# identical to Run 6/Run 7 for a clean comparison.
+dataset_type: mushroom
+dataset_root: datasets/extracted/mushroom
+label_map_path: configs/label_maps/mushroom_label_map.json
+
+image_size: 384
+batch_size: 16
+num_workers: 4
+pin_memory: false # only helps on CUDA; training runs on CPU (TRUBA orfoz partition)
+
+augmentation_preset: light
+random_resized_crop_scale: [0.9, 1.0]
+
+scarce_species_path: configs/label_maps/mushroom_scarce_species.json
+scarce_augmentation_preset: medium
+
+model:
+  name: resnet50
+  pretrained: true
+  freeze_backbone: false
+
+training:
+  loss: cross_entropy
+  class_weighted_loss: false
+  optimizer: adamw
+  lr: 0.0001
+  epochs: 30
+  early_stopping_patience: 8 # stop if val_macro_f1 hasn't improved in this many epochs
+  lr_scheduler_patience: 2 # ReduceLROnPlateau: halve lr if val_loss plateaus this long
+  mixed_precision: true # only takes effect on CUDA; no-op on CPU

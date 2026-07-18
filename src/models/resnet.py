@@ -25,3 +25,13 @@ class ResNet50(BaseModel):
         for param in self.backbone.parameters():
             param.requires_grad = True
 
+    def freeze_except_last_block(self) -> None:
+        """Freeze everything except `layer4` (the last residual block) and
+        `fc` — a middle ground between `freeze_backbone` (classifier only)
+        and `unfreeze_backbone` (everything), used for Stage 2 fine-tuning
+        on a small subset where full unfreezing risks catastrophic
+        forgetting of the other classes (see
+        notebooks/08_mushroom_confusion_diagnosis.ipynb, two-stage section)."""
+        for name, param in self.backbone.named_parameters():
+            param.requires_grad = name.startswith("layer4.") or name.startswith("fc.")
+

@@ -28,6 +28,7 @@ from src.data.dataloader import build_dataloader, build_pipeline
 from src.data.dataset import ImageClassificationDataset
 from src.data.label_map import invert_label_map
 from src.data.sampling import subsample_per_class
+from src.data.transforms import ScarcityAwareTransform, build_train_transform
 from src.evaluation.metrics import build_evaluation_report, macro_f1_score
 from src.models.checkpoint import load_checkpoint, save_checkpoint
 from src.models.registry import build_model
@@ -94,6 +95,25 @@ def main() -> None:
     pipeline = build_pipeline(config)
     num_classes = len(pipeline["label_map"])
     idx_to_label = invert_label_map(pipeline["label_map"])
+
+    scarce_species_path = config.get("scarce_species_path")
+    if scarce_species_path:
+        with open(scarce_species_path, encoding="utf-8") as f:
+            scarce_labels = set(json.load(f))
+        heavy_transform = build_train_transform(
+            image_size=config["image_size"],
+            augmentation_preset=config.get("scarce_augmentation_preset", "heavy"),
+            random_resized_crop_scale=tuple(config["random_resized_crop_scale"]),
+        )
+        print(
+            f"Scarcity-aware augmentation: {len(scarce_labels)} classes get "
+            f"'{config.get('scarce_augmentation_preset', 'heavy')}', the rest get "
+            f"'{config['augmentation_preset']}'"
+        )
+        pipeline["train_dataset"].transform = ScarcityAwareTransform(
+            scarce_labels, pipeline["train_dataset"].transform, heavy_transform
+        )
+
     train_dataset, val_dataset = build_datasets(pipeline, args)
     print(f"Training on {len(train_dataset)} images, validating on {len(val_dataset)}")
 
@@ -156,8 +176,11 @@ def main() -> None:
         print(f"Resumed from {args.resume}, continuing at epoch {start_epoch + 1}")
 
     epochs = args.epochs if args.epochs is not None else training_config["epochs"]
-    checkpoint_path = Path("outputs/checkpoints") / f"{dataset_type}_{model_config['name']}.pt"
-    best_checkpoint_path = Path("outputs/checkpoints") / f"{dataset_type}_{model_config['name']}_best.pt"
+    # Override with `checkpoint_name` in config when running concurrent experiments that
+    # would otherwise share (and race on) the same `{dataset}_{model}` checkpoint path.
+    checkpoint_stem = config.get("checkpoint_name", f"{dataset_type}_{model_config['name']}")
+    checkpoint_path = Path("outputs/checkpoints") / f"{checkpoint_stem}.pt"
+    best_checkpoint_path = Path("outputs/checkpoints") / f"{checkpoint_stem}_best.pt"
 
     run_id = os.environ.get("SLURM_JOB_ID", time.strftime("%Y%m%d-%H%M%S"))
     if args.subset_per_class is not None:
@@ -262,7 +285,7 @@ def main() -> None:
             report = build_evaluation_report(
                 best_val_metrics["y_true"], best_val_metrics["y_pred"], idx_to_label
             )
-            report_path = Path("outputs/reports") / f"{dataset_type}_{model_config['name']}_eval_report.json"
+            report_path = Path("outputs/reports") / f"{checkpoint_stem}_eval_report.json"
             report_path.parent.mkdir(parents=True, exist_ok=True)
             with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, ensure_ascii=False, indent=2)

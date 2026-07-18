@@ -5,6 +5,8 @@ import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 
+from src.data.transforms import ScarcityAwareTransform
+
 
 class ImageClassificationDataset(Dataset):
     """Generic image classification dataset.
@@ -37,7 +39,9 @@ class ImageClassificationDataset(Dataset):
 
         image = Image.open(Path(row[self.path_col])).convert("RGB")
 
-        if self.transform is not None:
+        if isinstance(self.transform, ScarcityAwareTransform):
+            image = self.transform(image, row[self.label_col])
+        elif self.transform is not None:
             image = self.transform(image)
 
         if self.label_map is not None and self.label_col in self.dataframe.columns:
