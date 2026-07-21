@@ -21,6 +21,7 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
+import mlflow
 import torch
 import torch.nn as nn
 from sklearn.metrics import precision_recall_fscore_support
@@ -32,13 +33,24 @@ from src.data.label_map import invert_label_map
 from src.evaluation.metrics import build_evaluation_report, macro_f1_score
 from src.models.checkpoint import load_model_from_checkpoint, save_checkpoint
 from src.training.optimizers import build_optimizer
-from src.training.tracking import log_epoch_metrics, log_evaluation_report, log_run_duration, wandb_run
+from src.training.tracking import (
+    log_epoch_metrics,
+    log_epoch_metrics_mlflow,
+    log_evaluation_report,
+    log_mlflow_evaluation_report,
+    log_mlflow_model,
+    log_run_duration,
+    mlflow_run,
+    wandb_run,
+)
+from src.utils.run_metadata import collect_run_metadata
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, help="Path to the stage-2 config YAML")
     parser.add_argument("--no-wandb", action="store_true", help="Disable Weights & Biases logging")
+    parser.add_argument("--no-mlflow", action="store_true", help="Disable MLflow logging/registry")
     return parser.parse_args()
 
 
@@ -108,6 +120,8 @@ def main() -> None:
     checkpoint_path = Path("outputs/checkpoints") / f"{checkpoint_stem}.pt"
     best_checkpoint_path = Path("outputs/checkpoints") / f"{checkpoint_stem}_best.pt"
 
+    run_metadata = collect_run_metadata(args.config, config.get("dataset_root"))
+
     def save(path: Path, epoch: int) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         save_checkpoint(
@@ -118,6 +132,7 @@ def main() -> None:
             label_map_path=config["label_map_path"],
             epoch=epoch,
             optimizer=optimizer,
+            run_metadata=run_metadata,
         )
 
     run_id = os.environ.get("SLURM_JOB_ID", time.strftime("%Y%m%d-%H%M%S"))
@@ -135,6 +150,11 @@ def main() -> None:
     tracking_context = (
         nullcontext() if args.no_wandb else wandb_run("visionlab", run_name, run_params)
     )
+    mlflow_context = (
+        nullcontext()
+        if args.no_mlflow
+        else mlflow_run("visionlab", run_name, run_params, run_metadata=run_metadata)
+    )
 
     run_start = time.perf_counter()
     best_val_macro_f1 = -1.0
@@ -142,7 +162,7 @@ def main() -> None:
     best_y_pred = None
     epochs_without_improvement = 0
 
-    with tracking_context:
+    with tracking_context, mlflow_context:
         for epoch in range(epochs):
             epoch_start = time.perf_counter()
 
@@ -182,16 +202,23 @@ def main() -> None:
                 f"val_macro_f1_scarce_only={scarce_macro_f1:.4f} | {elapsed:.1f}s"
             )
 
+            epoch_train_metrics = {
+                "loss": train_loss / train_total,
+                "accuracy": train_correct / train_total,
+            }
+            epoch_val_metrics = {"loss": 0.0, "accuracy": 0.0}
+            epoch_extra_metrics = {
+                "val_macro_f1_overall": overall_macro_f1,
+                "val_macro_f1_scarce_only": scarce_macro_f1,
+                "epoch_duration_seconds": elapsed,
+            }
             if not args.no_wandb:
                 log_epoch_metrics(
-                    epoch,
-                    {"loss": train_loss / train_total, "accuracy": train_correct / train_total},
-                    {"loss": 0.0, "accuracy": 0.0},
-                    extra_metrics={
-                        "val_macro_f1_overall": overall_macro_f1,
-                        "val_macro_f1_scarce_only": scarce_macro_f1,
-                        "epoch_duration_seconds": elapsed,
-                    },
+                    epoch, epoch_train_metrics, epoch_val_metrics, extra_metrics=epoch_extra_metrics
+                )
+            if not args.no_mlflow:
+                log_epoch_metrics_mlflow(
+                    epoch, epoch_train_metrics, epoch_val_metrics, extra_metrics=epoch_extra_metrics
                 )
 
             save(checkpoint_path, epoch)
@@ -227,9 +254,19 @@ def main() -> None:
             print(f"Full report saved to {report_path}")
             if not args.no_wandb:
                 log_evaluation_report(report)
+            if not args.no_mlflow:
+                log_mlflow_evaluation_report(report)
+                log_mlflow_model(
+                    model,
+                    best_checkpoint_path,
+                    registered_model_name=f"{dataset_type}_{model_config['name']}_stage2",
+                    run_metadata=run_metadata,
+                )
 
         if not args.no_wandb:
             log_run_duration(run_duration)
+        if not args.no_mlflow and best_y_true is not None:
+            mlflow.log_metric("run_duration_seconds", run_duration)
         print(f"\nTotal run duration: {run_duration:.1f}s")
 
     print(f"Best checkpoint (overall val_macro_f1={best_val_macro_f1:.4f}) saved to {best_checkpoint_path}")

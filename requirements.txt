@@ -5,6 +5,8 @@ pyyaml
 torch
 torchvision
 matplotlib
+wandb
+scikit-learn
 mlflow
-tensorboard
+dvc
 ipykernel

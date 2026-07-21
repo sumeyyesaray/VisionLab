@@ -1,0 +1,46 @@
+schema: '2.0'
+stages:
+  preprocess_mushroom:
+    cmd: python scripts/dvc_pipeline/preprocess_mushroom.py
+    deps:
+    - path: datasets/extracted/mushroom
+      hash: md5
+      md5: cd07bd0040a7698a06a51da115f109b4.dir
+      size: 12177012999
+      nfiles: 104091
+    - path: scripts/dvc_pipeline/preprocess_mushroom.py
+      hash: md5
+      md5: af25f00f01f45ee9e87b98f4347bfb6a
+      size: 1115
+    - path: src/data/loaders.py
+      hash: md5
+      md5: 560547f78852c8a3e82c7a1f6c841250
+      size: 2280
+    outs:
+    - path: datasets/processed/mushroom
+      hash: md5
+      md5: 40e7f1c2020b43ec040d8ec46a8901b3.dir
+      size: 127994032
+      nfiles: 3
+  preprocess_flower:
+    cmd: python scripts/dvc_pipeline/preprocess_flower.py
+    deps:
+    - path: datasets/extracted/flower_data
+      hash: md5
+      md5: 66577e85dfdf731eb7b5241c9c5a8e94.dir
+      size: 346811463
+      nfiles: 8190
+    - path: scripts/dvc_pipeline/preprocess_flower.py
+      hash: md5
+      md5: 32d7216ed6624fee6d9bf95c25829d28
+      size: 979
+    - path: src/data/loaders.py
+      hash: md5
+      md5: 560547f78852c8a3e82c7a1f6c841250
+      size: 2280
+    outs:
+    - path: datasets/processed/flower
+      hash: md5
+      md5: 5220fe3d200de38c44316dcb0229eb99.dir
+      size: 1022087
+      nfiles: 3

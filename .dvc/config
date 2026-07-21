@@ -1,0 +1,6 @@
+[core]
+    remote = localstorage
+[cache]
+    type = hardlink
+['remote "localstorage"']
+    url = ../.dvc-remote-storage

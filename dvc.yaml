@@ -1,0 +1,18 @@
+stages:
+  preprocess_mushroom:
+    cmd: python scripts/dvc_pipeline/preprocess_mushroom.py
+    deps:
+      - datasets/extracted/mushroom
+      - scripts/dvc_pipeline/preprocess_mushroom.py
+      - src/data/loaders.py
+    outs:
+      - datasets/processed/mushroom
+
+  preprocess_flower:
+    cmd: python scripts/dvc_pipeline/preprocess_flower.py
+    deps:
+      - datasets/extracted/flower_data
+      - scripts/dvc_pipeline/preprocess_flower.py
+      - src/data/loaders.py
+    outs:
+      - datasets/processed/flower

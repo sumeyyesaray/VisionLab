@@ -16,10 +16,16 @@ def save_checkpoint(
     epoch: int | None = None,
     optimizer: torch.optim.Optimizer | None = None,
     scaler: "torch.amp.GradScaler | None" = None,
+    run_metadata: dict | None = None,
 ) -> None:
     """Save a checkpoint. Pass `epoch`/`optimizer`/`scaler` too when the
     checkpoint needs to support resuming training (not just inference) —
     see `load_checkpoint` and scripts/train_baseline.py's `--resume` flag.
+
+    Pass `run_metadata` (see src/utils/run_metadata.collect_run_metadata) to
+    make the checkpoint self-describing: which git commit, which exact
+    config, and which DVC data version produced it. Without it, a checkpoint
+    found six months from now is just weights with a guessed provenance.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -33,6 +39,8 @@ def save_checkpoint(
         "saved_at": datetime.now(timezone.utc).isoformat(),
         "epoch": epoch,
     }
+    if run_metadata is not None:
+        checkpoint["run_metadata"] = run_metadata
     if optimizer is not None:
         checkpoint["optimizer_state_dict"] = optimizer.state_dict()
     if scaler is not None:

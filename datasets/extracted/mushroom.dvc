@@ -1,0 +1,6 @@
+outs:
+- md5: cd07bd0040a7698a06a51da115f109b4.dir
+  size: 12177012999
+  nfiles: 104091
+  hash: md5
+  path: mushroom

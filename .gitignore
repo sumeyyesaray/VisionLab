@@ -34,10 +34,21 @@ logs/
 # Outputs
 outputs/
 
+# DVC remote storage (local path remote — see .dvc/config)
+.dvc-remote-storage/
+
 # Datasets
+# datasets/raw/*.zip are stale truncated placeholders from an earlier failed
+# download (see notebooks/08_mushroom_confusion_diagnosis.ipynb) — real data
+# was pulled straight into datasets/extracted/ via the Kaggle API and never
+# re-zipped, so raw/ stays untracked by both git and DVC.
 datasets/raw/
-datasets/extracted/
-datasets/processed/
+# datasets/extracted/ and datasets/processed/ are now DVC-tracked (dvc.yaml +
+# dvc add) instead of blanket-gitignored — DVC manages its own per-directory
+# .gitignore entries so only the small .dvc pointer files/dvc.lock hit git.
+# PlantVillage is the exception: not used by any pipeline yet (see project
+# roadmap notes), so it isn't DVC-tracked either — stays plain-gitignored.
+datasets/extracted/PlantVillage/
 
 # OS
 .DS_Store
