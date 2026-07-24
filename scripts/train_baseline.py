@@ -269,6 +269,8 @@ def main() -> None:
                 optimizer=optimizer,
                 scaler=scaler,
                 run_metadata=run_metadata,
+                label_map=pipeline["label_map"],
+                image_size=config["image_size"],
             )
 
             if val_macro_f1 > best_val_macro_f1:
@@ -283,6 +285,8 @@ def main() -> None:
                     label_map_path=config["label_map_path"],
                     epoch=epoch,
                     run_metadata=run_metadata,
+                    label_map=pipeline["label_map"],
+                    image_size=config["image_size"],
                 )
             else:
                 epochs_without_improvement += 1
@@ -324,6 +328,8 @@ def main() -> None:
                     best_checkpoint_path,
                     registered_model_name=f"{dataset_type}_{model_config['name']}",
                     run_metadata=run_metadata,
+                    label_map=pipeline["label_map"],
+                    image_size=config["image_size"],
                 )
 
         if not args.no_wandb:

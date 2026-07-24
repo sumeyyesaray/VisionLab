@@ -133,6 +133,8 @@ def main() -> None:
             epoch=epoch,
             optimizer=optimizer,
             run_metadata=run_metadata,
+            label_map=label_map,
+            image_size=config["image_size"],
         )
 
     run_id = os.environ.get("SLURM_JOB_ID", time.strftime("%Y%m%d-%H%M%S"))
@@ -261,6 +263,8 @@ def main() -> None:
                     best_checkpoint_path,
                     registered_model_name=f"{dataset_type}_{model_config['name']}_stage2",
                     run_metadata=run_metadata,
+                    label_map=label_map,
+                    image_size=config["image_size"],
                 )
 
         if not args.no_wandb:

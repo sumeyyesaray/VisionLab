@@ -15,6 +15,9 @@ dependencies = [
     "scikit-learn",
     "mlflow",
     "dvc",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
 ]
 
 [tool.setuptools.packages.find]

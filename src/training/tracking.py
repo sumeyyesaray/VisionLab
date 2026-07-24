@@ -1,3 +1,4 @@
+import json
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -101,6 +102,8 @@ def log_mlflow_model(
     checkpoint_path: str | Path,
     registered_model_name: str | None = None,
     run_metadata: dict | None = None,
+    label_map: dict | None = None,
+    image_size: int | None = None,
 ) -> None:
     """Logs the resumable checkpoint file (optimizer/scaler state included)
     as a plain artifact, and separately registers the model itself in
@@ -108,20 +111,40 @@ def log_mlflow_model(
     makes it loadable with `mlflow.pytorch.load_model` and visible in the
     registry's "which version is production" view, which a raw artifact
     file alone wouldn't give you.
+
+    `label_map` and `image_size` are stored as tags on the registered model
+    *version* (not just embedded in the checkpoint file) so
+    src/inference/registry.py can reconstruct preprocessing and class names
+    straight from the registry — no filesystem path to a config/label_map
+    file needs to resolve on whatever machine ends up serving the model.
     """
     mlflow.log_artifact(str(checkpoint_path), artifact_path="checkpoint")
     tags = {k: str(v) for k, v in (run_metadata or {}).items() if v is not None}
-    mlflow.pytorch.log_model(
+    if label_map is not None:
+        tags["label_map"] = json.dumps(label_map)
+    if image_size is not None:
+        tags["image_size"] = str(image_size)
+    model_info = mlflow.pytorch.log_model(
         model,
         artifact_path="model",
         registered_model_name=registered_model_name,
-        tags=tags or None,
         # Default 'pt2' format traces the model via torch.export and requires
         # an input_example; our custom architectures (e.g. the hierarchical
         # genus+species model returning a tuple) aren't guaranteed export-
         # traceable, so stick with the classic pickle-based save.
         serialization_format="pickle",
     )
+    # `log_model`'s own `tags=` kwarg lands on the run/model-artifact
+    # metadata, not the registry's ModelVersion — set_model_version_tag is
+    # the only thing that actually makes them show up on
+    # `client.get_model_version_by_alias(...).tags`, which is what serving
+    # reads.
+    if registered_model_name is not None and tags and model_info.registered_model_version:
+        client = mlflow.MlflowClient()
+        for key, value in tags.items():
+            client.set_model_version_tag(
+                registered_model_name, model_info.registered_model_version, key, value
+            )
 
 
 def log_mlflow_evaluation_report(report: dict) -> None:
