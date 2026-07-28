@@ -265,6 +265,7 @@ def main() -> None:
                     run_metadata=run_metadata,
                     label_map=label_map,
                     image_size=config["image_size"],
+                    dataset_type=dataset_type,
                 )
 
         if not args.no_wandb:

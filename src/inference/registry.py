@@ -28,6 +28,7 @@ class ServableModel:
     model: torch.nn.Module
     idx_to_label: dict[int, str]
     image_size: int
+    dataset_type: str
 
 
 def _client() -> MlflowClient:
@@ -69,6 +70,9 @@ def load_production_model(name: str) -> ServableModel:
     label_map = json.loads(model_version.tags["label_map"])  # label (str) -> index (int)
     idx_to_label = {idx: label for label, idx in label_map.items()}
     image_size = int(model_version.tags["image_size"])
+    # Fallback covers versions registered before the dataset_type tag existed —
+    # every registered_model_name follows the f"{dataset_type}_{model}" convention.
+    dataset_type = model_version.tags.get("dataset_type") or name.split("_")[0]
 
     return ServableModel(
         name=name,
@@ -76,6 +80,7 @@ def load_production_model(name: str) -> ServableModel:
         model=model,
         idx_to_label=idx_to_label,
         image_size=image_size,
+        dataset_type=dataset_type,
     )
 
 

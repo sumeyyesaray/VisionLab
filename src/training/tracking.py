@@ -104,6 +104,7 @@ def log_mlflow_model(
     run_metadata: dict | None = None,
     label_map: dict | None = None,
     image_size: int | None = None,
+    dataset_type: str | None = None,
 ) -> None:
     """Logs the resumable checkpoint file (optimizer/scaler state included)
     as a plain artifact, and separately registers the model itself in
@@ -124,6 +125,8 @@ def log_mlflow_model(
         tags["label_map"] = json.dumps(label_map)
     if image_size is not None:
         tags["image_size"] = str(image_size)
+    if dataset_type is not None:
+        tags["dataset_type"] = dataset_type
     model_info = mlflow.pytorch.log_model(
         model,
         artifact_path="model",

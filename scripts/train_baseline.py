@@ -68,6 +68,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", type=str, default=None, help="Path to a checkpoint to resume from")
     parser.add_argument("--no-wandb", action="store_true", help="Disable Weights & Biases logging")
     parser.add_argument("--no-mlflow", action="store_true", help="Disable MLflow logging/registry")
+    parser.add_argument(
+        "--extra-train-csv",
+        type=str,
+        default=None,
+        help="Extra local_path/label CSV appended to the training set (e.g. a "
+        "flywheel export from scripts/flywheel_retrain.sbatch)",
+    )
+    parser.add_argument(
+        "--checkpoint-name",
+        type=str,
+        default=None,
+        help="Override config's checkpoint_name (avoids collisions with concurrent runs)",
+    )
     return parser.parse_args()
 
 
@@ -92,6 +105,10 @@ def build_datasets(pipeline: dict, args: argparse.Namespace):
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
+    if args.extra_train_csv:
+        config["extra_train_csv"] = args.extra_train_csv
+    if args.checkpoint_name:
+        config["checkpoint_name"] = args.checkpoint_name
     dataset_type = config["dataset_type"]
     model_config = config["model"]
     training_config = config["training"]
@@ -330,6 +347,7 @@ def main() -> None:
                     run_metadata=run_metadata,
                     label_map=pipeline["label_map"],
                     image_size=config["image_size"],
+                    dataset_type=dataset_type,
                 )
 
         if not args.no_wandb:

@@ -1,3 +1,4 @@
+import pandas as pd
 from torch.utils.data import DataLoader, Dataset
 
 from src.data.dataset import ImageClassificationDataset
@@ -30,6 +31,12 @@ def build_pipeline(config: dict) -> dict:
     planning).
     """
     frames = load_dataframes(config["dataset_type"], config["dataset_root"])
+
+    extra_train_csv = config.get("extra_train_csv")
+    if extra_train_csv:
+        extra_df = pd.read_csv(extra_train_csv)
+        print(f"Adding {len(extra_df)} extra training rows from {extra_train_csv}")
+        frames["train"] = pd.concat([frames["train"], extra_df], ignore_index=True)
 
     label_map = load_or_build_label_map(config["label_map_path"], frames["train"]["label"])
 

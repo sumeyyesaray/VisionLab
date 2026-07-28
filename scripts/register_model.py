@@ -88,6 +88,7 @@ def main() -> None:
             run_metadata=run_metadata,
             label_map=label_map,
             image_size=image_size,
+            dataset_type=checkpoint["dataset_type"],
         )
 
     if args.production:

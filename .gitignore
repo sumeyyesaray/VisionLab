@@ -31,6 +31,14 @@ wandb/
 runs/
 logs/
 
+# Flywheel (see src/flywheel/) — flywheel.db is the working SQLite store,
+# datasets/flywheel/ is the raw inbox of uploaded images before they're
+# verified via POST /feedback and exported into a DVC-tracked snapshot
+# under datasets/extracted/<dataset_type>_flywheel/ (that part IS tracked,
+# same as datasets/extracted/mushroom — see the note below).
+flywheel.db
+datasets/flywheel/
+
 # Outputs
 outputs/
 
