@@ -27,7 +27,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
-from src.flywheel.store import get_stats, log_prediction, submit_feedback
+from src.flywheel.store import get_pending_verification, get_stats, log_prediction, submit_feedback
 from src.inference.predictor import predict
 from src.inference.registry import ServableModel, load_all_production_models
 
@@ -123,3 +123,24 @@ def feedback_endpoint(feedback: FeedbackRequest) -> dict:
 @app.get("/flywheel/stats")
 def flywheel_stats(dataset_type: str | None = Query(default=None)) -> dict:
     return get_stats(dataset_type)
+
+
+@app.get("/flywheel/pending")
+def flywheel_pending(dataset_type: str | None = Query(default=None)) -> dict:
+    """What a reviewer should look at — see RETRAINING_POLICY.md decision 1:
+    only predictions the model itself wasn't confident about (confidence <
+    CONFIDENCE_REVIEW_THRESHOLD) ever show up here."""
+    rows = get_pending_verification(dataset_type)
+    return {
+        "pending": [
+            {
+                "prediction_id": row["id"],
+                "dataset_type": row["dataset_type"],
+                "model_name": row["model_name"],
+                "predicted_class": row["predicted_class"],
+                "confidence": row["confidence"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+    }

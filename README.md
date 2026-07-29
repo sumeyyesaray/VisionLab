@@ -67,8 +67,15 @@ src/
 
 - **PyTorch / torchvision** — models and training
 - **Weights & Biases** — experiment tracking
+- **MLflow** — model registry, "which checkpoint is production"
+- **DVC** — data versioning
+- **FastAPI** — model serving (`src/deployment/api.py`)
 - **SLURM (Truba HPC cluster)** — large-scale training jobs
 - **Config-driven (YAML)** — per-dataset hyperparameters, no code changes needed to switch datasets
+
+See `notebooks/09_mlops_infrastructure.ipynb` for how these fit together,
+and [`RETRAINING_POLICY.md`](RETRAINING_POLICY.md) for the continuous
+learning loop's retraining/promotion thresholds.
 
 ## Roadmap
 
