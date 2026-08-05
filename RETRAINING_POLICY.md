@@ -51,15 +51,20 @@ result that isn't actually better.
 submission, which is what the day condition measures against — never
 having triggered before counts as infinitely overdue, not as "skip."
 
-**Not automated by anything in this repo.** Run manually or add a
-crontab entry yourself once you trust it:
+**Automated via crontab** (`crontab -l` on `arf-ui1`, user `hasozkan`) — runs
+daily, logs to `logs/flywheel_cron.log`. Uses the `visionlab` conda env's
+python by its absolute path rather than `module load`/`conda activate`,
+since cron's minimal environment doesn't source the shell init those rely
+on:
 
 ```
-0 3 * * * cd /arf/scratch/hasozkan/sum/VisionLab && \
-    python scripts/check_flywheel_threshold.py --dataset-type mushroom
-0 3 * * * cd /arf/scratch/hasozkan/sum/VisionLab && \
-    python scripts/check_flywheel_threshold.py --dataset-type flower
+PATH=/usr/bin:/bin:/usr/local/bin
+
+0 3 * * * cd /arf/scratch/hasozkan/sum/VisionLab && /arf/home/hasozkan/miniforge3/envs/visionlab/bin/python scripts/check_flywheel_threshold.py --dataset-type mushroom >> logs/flywheel_cron.log 2>&1
+15 3 * * * cd /arf/scratch/hasozkan/sum/VisionLab && /arf/home/hasozkan/miniforge3/envs/visionlab/bin/python scripts/check_flywheel_threshold.py --dataset-type flower >> logs/flywheel_cron.log 2>&1
 ```
+
+See `docs/truba_usage.md` for how to inspect/edit this.
 
 **Where to change it:** `--count-threshold` / `--days-threshold` flags.
 

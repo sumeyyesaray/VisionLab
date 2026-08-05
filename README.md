@@ -68,7 +68,13 @@ src/
 - **PyTorch / torchvision** — models and training
 - **Weights & Biases** — experiment tracking
 - **MLflow** — model registry, "which checkpoint is production"
-- **DVC** — data versioning
+- **DVC** — data versioning (⚠️ the configured remote, `../.dvc-remote-storage`, sits on the
+  same `/arf` Lustre filesystem as the working copy — it protects against accidental local
+  deletes/overwrites, but it is **not an off-cluster backup**. If TRUBA scratch storage has a
+  purge policy, or `/arf` has an outage, the working copy and the "remote" can be lost
+  together. Worth confirming TRUBA's retention policy for `/arf/scratch` and, if there's any
+  purge risk, adding a real off-cluster remote — S3/MinIO, or even another filesystem —
+  before relying on this for anything that can't be re-downloaded/re-derived.)
 - **FastAPI** — model serving (`src/deployment/api.py`)
 - **SLURM (Truba HPC cluster)** — large-scale training jobs
 - **Config-driven (YAML)** — per-dataset hyperparameters, no code changes needed to switch datasets
