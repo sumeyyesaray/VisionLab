@@ -19,6 +19,15 @@
 #SBATCH --time=3-00:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
+# --export=NONE: this job is submitted by check_flywheel_threshold.py, which
+# check_flywheel_threshold.py's own crontab entry runs in cron's minimal
+# environment (no `module`/`conda activate` set up — see docs/truba_usage.md
+# section 7). sbatch's default --export=ALL propagates that stripped
+# environment straight into this script, so `module purge` below failed with
+# "module: command not found" the first two times cron triggered this (jobs
+# 6182692, 6182705) — --export=NONE makes this job build its own environment
+# from scratch instead of inheriting whatever submitted it.
+#SBATCH --export=NONE
 
 set -euo pipefail
 
