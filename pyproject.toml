@@ -18,6 +18,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "python-multipart",
+    "pytest",
 ]
 
 [tool.setuptools.packages.find]
